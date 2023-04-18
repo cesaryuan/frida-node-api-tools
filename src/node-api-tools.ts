@@ -101,9 +101,7 @@ class NapiEnv extends NativePointer {
         return {
             error_message: error_info.readPointer().readUtf8String() ?? "",
             engine_reserved: error_info.add(Process.pointerSize).readPointer(),
-            engine_error_code: error_info
-                .add(Process.pointerSize * 2)
-                .readInt(),
+            engine_error_code: error_info.add(Process.pointerSize * 2).readInt(),
             error_code: error_info.add(Process.pointerSize * 3).readInt(),
         };
     }
@@ -128,14 +126,7 @@ class NapiEnv extends NativePointer {
     get_property(obj: NapiValue, key: string): NapiValue {
         const env = this.env;
         const result = Memory.alloc(4);
-        if (
-            NapiEnv.napi_get_property_func(
-                env,
-                obj,
-                this.create_string_utf8(key),
-                result
-            ) != 0
-        ) {
+        if (NapiEnv.napi_get_property_func(env, obj, this.create_string_utf8(key), result) != 0) {
             throw new Error(this.get_last_error_info().error_message);
         }
         return NapiValue.from(this, result.readPointer());
@@ -144,13 +135,7 @@ class NapiEnv extends NativePointer {
     run_script(script: string): NapiValue {
         const env = this.env;
         const result = Memory.alloc(4);
-        if (
-            NapiEnv.napi_run_script_func(
-                env,
-                this.create_string_utf8(script),
-                result
-            ) != 0
-        ) {
+        if (NapiEnv.napi_run_script_func(env, this.create_string_utf8(script), result) != 0) {
             const error_info = this.get_last_error_info();
             throw new Error(error_info.error_message);
         }
@@ -178,19 +163,11 @@ class NapiEnv extends NativePointer {
     get_buffer_info(napi_value: NapiValue) {
         const buffer = Memory.alloc(4);
         const buffer_len = Memory.alloc(4);
-        if (
-            NapiEnv.napi_get_buffer_info_func(
-                this.env,
-                napi_value,
-                buffer,
-                buffer_len
-            ) != 0
-        ) {
+        if (NapiEnv.napi_get_buffer_info_func(this.env, napi_value, buffer, buffer_len) != 0) {
             throw new Error(this.get_last_error_info().error_message);
         }
         const result = buffer.readPointer().readByteArray(buffer_len.readInt());
-        if (result === null)
-            throw new Error("readByteArray failed, result is null");
+        if (result === null) throw new Error("readByteArray failed, result is null");
         return result;
     }
 
