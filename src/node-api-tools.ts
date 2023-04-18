@@ -39,7 +39,7 @@ enum napi_status {
 }
 
 interface napi_extended_error_info {
-    error_message: string | null;
+    error_message: string;
     engine_reserved: NativePointer;
     engine_error_code: number;
     error_code: napi_status;
@@ -91,7 +91,7 @@ class NapiEnv extends NativePointer {
         super(env);
     }
 
-    napi_get_last_error_info(): napi_extended_error_info {
+    get_last_error_info(): napi_extended_error_info {
         const env = this.env;
         const result = Memory.alloc(4);
         if (NapiEnv.napi_get_last_error_info_func(env, result) != 0) {
@@ -99,7 +99,7 @@ class NapiEnv extends NativePointer {
         }
         const error_info = result.readPointer();
         return {
-            error_message: error_info.readPointer().readUtf8String(),
+            error_message: error_info.readPointer().readUtf8String() ?? "",
             engine_reserved: error_info.add(Process.pointerSize).readPointer(),
             engine_error_code: error_info
                 .add(Process.pointerSize * 2)
@@ -107,7 +107,7 @@ class NapiEnv extends NativePointer {
             error_code: error_info.add(Process.pointerSize * 3).readInt(),
         };
     }
-    create_string(str: string): NapiValue {
+    create_string_utf8(str: string): NapiValue {
         const env = this.env;
         const script_ptr = Memory.allocUtf8String(str);
         const script_len = str.length;
@@ -120,44 +120,44 @@ class NapiEnv extends NativePointer {
                 point_to_napi_value
             ) != 0
         ) {
-            throw new Error(this.napi_get_last_error_info().error_message!);
+            throw new Error(this.get_last_error_info().error_message);
         }
         return NapiValue.from(this, point_to_napi_value.readPointer());
     }
 
-    napi_get_property(obj: NapiValue, key: string): NapiValue {
+    get_property(obj: NapiValue, key: string): NapiValue {
         const env = this.env;
         const result = Memory.alloc(4);
         if (
             NapiEnv.napi_get_property_func(
                 env,
                 obj,
-                this.create_string(key),
+                this.create_string_utf8(key),
                 result
             ) != 0
         ) {
-            throw new Error(this.napi_get_last_error_info().error_message!);
+            throw new Error(this.get_last_error_info().error_message);
         }
         return NapiValue.from(this, result.readPointer());
     }
 
-    napi_run_script(script: string): NapiValue {
+    run_script(script: string): NapiValue {
         const env = this.env;
         const result = Memory.alloc(4);
         if (
             NapiEnv.napi_run_script_func(
                 env,
-                this.create_string(script),
+                this.create_string_utf8(script),
                 result
             ) != 0
         ) {
-            const error_info = this.napi_get_last_error_info();
-            throw new Error(error_info.error_message!);
+            const error_info = this.get_last_error_info();
+            throw new Error(error_info.error_message);
         }
         return NapiValue.from(this, result.readPointer());
     }
 
-    get_napi_value_string_utf8(napi_value: NapiValue) {
+    get_value_string_utf8(napi_value: NapiValue) {
         const result = Memory.alloc(4);
         const buffer = Memory.alloc(1000);
         const buffer_len = 1000;
@@ -170,7 +170,7 @@ class NapiEnv extends NativePointer {
                 result
             ) != 0
         ) {
-            throw new Error(this.napi_get_last_error_info().error_message!);
+            throw new Error(this.get_last_error_info().error_message);
         }
         return buffer.readUtf8String();
     }
@@ -186,7 +186,7 @@ class NapiEnv extends NativePointer {
                 buffer_len
             ) != 0
         ) {
-            throw new Error(this.napi_get_last_error_info().error_message!);
+            throw new Error(this.get_last_error_info().error_message);
         }
         const result = buffer.readPointer().readByteArray(buffer_len.readInt());
         if (result === null)
@@ -194,10 +194,10 @@ class NapiEnv extends NativePointer {
         return result;
     }
 
-    get_type(napi_value: NapiValue): napi_valuetype {
+    typeof(napi_value: NapiValue): napi_valuetype {
         const result = Memory.alloc(4);
         if (NapiEnv.napi_typeof_func(this.env, napi_value, result) != 0) {
-            throw new Error(this.napi_get_last_error_info().error_message!);
+            throw new Error(this.get_last_error_info().error_message);
         }
         return result.readInt();
     }
@@ -223,7 +223,7 @@ class NapiValue extends NativePointer {
     }
 
     getString(): string | null {
-        return this.env.get_napi_value_string_utf8(this);
+        return this.env.get_value_string_utf8(this);
     }
 
     getArrayBuffer(): ArrayBuffer {
@@ -231,11 +231,11 @@ class NapiValue extends NativePointer {
     }
 
     getType(): napi_valuetype {
-        return this.env.get_type(this);
+        return this.env.typeof(this);
     }
 
     getProperty(key: string): NapiValue {
-        return this.env.napi_get_property(this, key);
+        return this.env.get_property(this, key);
     }
 }
 
