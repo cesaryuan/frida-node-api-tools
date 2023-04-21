@@ -1,7 +1,7 @@
 
 # frida-node-api-tools
 
-frida script help to intercept with NodeJS API and Electron Application
+Frida script to intercept with NodeJS API and Electron Application
 
 
 ## Usage
