@@ -71,11 +71,11 @@ interface Parameters {
 
 let logFile: File | null = null;
 rpc.exports = {
-    init(stage, options) {
+    init(stage, options: Parameters) {
         const defaultOption: Parameters = {
-            forceOpenDevTools: true,
-            logToFile: true,
-            saveByteCodeToFile: false,
+            "forceOpenDevTools": true,
+            "logToFile": true,
+            "saveByteCodeToFile": false,
         };
         options = Object.assign(defaultOption, options);
         if (options.logToFile) {
@@ -93,7 +93,7 @@ rpc.exports = {
                 console[key] = function (...args) {
                     appendLineToFile(
                         logFile!,
-                        `[${new Date().toLocaleString()}] : ${args.join(" ")}`
+                        `[${new Date().toLocaleString()}] ${key}: ${args.join(" ")}`
                     );
                     originFunc.apply(console, args);
                 };
