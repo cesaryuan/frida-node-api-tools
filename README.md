@@ -13,4 +13,4 @@ See `src/index.js` for sample code.
 - [x] Intercept NodeJS API
 - [x] Intercept Electron API
 - [x] Force open Electron devtools (only support 32bit Electron)
-  `frida -l build/_agent.js --exit-on-error --kill-on-exit -f <path/to/electron>`
+  `frida -l build/_agent.js --exit-on-error --kill-on-exit -f <path/to/electron>` Then press F12 in Electron window.
