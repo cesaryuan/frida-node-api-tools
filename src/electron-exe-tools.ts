@@ -182,8 +182,7 @@ enum Modifiers {
     // IsRight, IsComposing don't change the meaning of the key
     // being pressed. NumLockOn, ScrollLockOn, CapsLockOn are stateful
     // and don't indicate explicit depressed state.
-    kKeyModifiers = kSymbolKey | kFnKey | kAltGrKey | kMetaKey | kAltKey |
-                    kControlKey | kShiftKey,
+    kKeyModifiers = kSymbolKey | kFnKey | kAltGrKey | kMetaKey | kAltKey | kControlKey | kShiftKey,
 
     kNoModifiers = 0,
 }
