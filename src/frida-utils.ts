@@ -14,6 +14,26 @@ function findInReadableRanges(model: Module, pattern: MatchPattern | string) {
     return matches;
 }
 
+function appendLineToFile(filePath: string | File, line: string) {
+    let file: File;
+    if (typeof filePath === "string") {
+        file = new File(filePath, "a");
+        file.write(line + '\n');
+        file.close();
+    } else {
+        file = filePath;
+        file.write(line + '\n');
+        file.flush();
+    }
+}
+
+function getProcessDir() {
+    const processDir = Process.enumerateModules()[0].path;
+    return processDir.substring(0, processDir.lastIndexOf('/'));
+}
+
 export {
     findInReadableRanges,
+    appendLineToFile,
+    getProcessDir
 }

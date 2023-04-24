@@ -1,26 +1,5 @@
-import { findInReadableRanges } from "./utils.js";
+import { findInReadableRanges } from "./frida-utils.js";
 
-let firstWebContentsPtr: NativePointer | null = null;
-let firstBaseWindowPtr: NativePointer | null = null;
-let offsetBetweenBrowserWindowAndWebContents = 0x8C;
-/**
- * 这里采取的计算offset的方式是通过记录第一个被创建的BrowserWindow和WebContents的地址，然后计算出offset
- * WebContents的地址是通过Hook WebContents::LoadURL获取的；BrowserWindow的地址是通过Hook BrowserWindow::OnWindowShow获取的
- * 这基于以下假设：
- * 1. 所有WebContents都会调用LoadURL
- * 2. 每一个WebContents都会被一个BrowserWindow持有
- * @param windowPtr 
- * @returns 
- */
-function windowPtrToWebContentsPtr(windowPtr: NativePointer): NativePointer {
-    if (offsetBetweenBrowserWindowAndWebContents === null && firstBaseWindowPtr !== null && firstWebContentsPtr !== null) {
-        offsetBetweenBrowserWindowAndWebContents = Memory.scanSync(firstBaseWindowPtr, 0x100, firstWebContentsPtr.toMatchPattern())[0].address.sub(firstBaseWindowPtr).toInt32();
-        console.log('Calculate offset between BrowserWindow and WebContents:', offsetBetweenBrowserWindowAndWebContents);
-    }
-    const webContentsPtr = windowPtr.add(offsetBetweenBrowserWindowAndWebContents).readPointer();
-    console.log("webContentsPtr", webContentsPtr);
-    return webContentsPtr;
-}
 /**
  * WebContents::OpenDevTools
  */
@@ -72,7 +51,7 @@ function findLoadURLAddress(electronModule: Module | undefined = undefined): Nat
     if (a.length == 0) throw new Error("find no matches");
     const [match] = a;
     // Then, find the start of the function
-    const [func_start] = Memory.scanSync(match.address.sub(0x30), 0x30, "55 89 e5 53 57 56");
+    const [func_start] = Memory.scanSync(match.address.sub(0x35), 0x35, "55 89 e5 53 57 56");
     console.log(`Find WebContents::LoadURL start at ${func_start.address}`);
     return func_start.address;
 }
@@ -107,7 +86,21 @@ function findBaseWindowOnWindowShow(electronModule: Module | undefined = undefin
     return BaseWindowOnWindowShow.address;
 }
 
-function forceOpenDevtools(electronModule: Module | undefined = undefined) {
+function findWebContentsPreHandleKeyboardEvent(electronModule: Module | undefined = undefined): NativePointer {
+    const m = electronModule ?? Process.enumerateModules()[0];
+    // Firstly, find the string "show" address
+    const pattern = new MatchPattern("53 6A ?? 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 88 44 24 ?? 89 D9 E8");
+    const a = findInReadableRanges(m, pattern);
+    if (a.length > 1) throw new Error("find more than one matches");
+    if (a.length == 0) throw new Error("find no matches");
+    const [match] = a;
+    // Then, find the start of the function
+    const [func_start] = Memory.scanSync(match.address.sub(0x174-0xe8), 0x174-0xe8, "55 89 e5 53 57 56");
+    console.log(`Find WebContents::PreHandleKeyboardEvent start at ${func_start.address}`);
+    return func_start.address;
+}
+
+function forceOpenDevtools(electronModule: Module | undefined = undefined, {whenF12Pressed = true, whenWindowShow = false} = {}) {
     const module = electronModule ?? Process.enumerateModules()[0];
     const OpenDevToolsFunction = new NativeFunction(
         findOpenDevToolsAddress(module),
@@ -136,34 +129,76 @@ function forceOpenDevtools(electronModule: Module | undefined = undefined) {
         }
     });
 
-    // const WebContentsLoadURL = m.add(0x59e200 - 0x400000);
-    const WebContentsLoadURL = findLoadURLAddress(module);
-    Interceptor.attach(WebContentsLoadURL, {
-        onEnter: function (args) {
-            console.log("Enter WebContents::LoadURL");
-            const thisPtr = (this.context as Ia32CpuContext)['ecx'];
-            if (firstWebContentsPtr === null) {
-                firstWebContentsPtr = thisPtr;
+    if(whenWindowShow){
+        let firstWebContentsPtr: NativePointer | null = null;
+        let firstBaseWindowPtr: NativePointer | null = null;
+        let offsetWinAndWebContents: number | null = null;
+        /**
+         * 这里采取的计算offset的方式是通过记录第一个被创建的BrowserWindow和WebContents的地址，然后计算出offset
+         * WebContents的地址是通过Hook WebContents::LoadURL获取的；BrowserWindow的地址是通过Hook BrowserWindow::OnWindowShow获取的
+         * 这基于以下假设：
+         * 1. 所有WebContents都会调用LoadURL
+         * 2. 每一个WebContents都会被一个BrowserWindow持有
+         * @param windowPtr 
+         * @returns 
+         */
+        const windowPtrToWebContentsPtr = function(windowPtr: NativePointer): NativePointer {
+            if (offsetWinAndWebContents === null && firstBaseWindowPtr !== null && firstWebContentsPtr !== null) {
+                offsetWinAndWebContents = Memory.scanSync(firstBaseWindowPtr, 0x100, firstWebContentsPtr.toMatchPattern())[0].address.sub(firstBaseWindowPtr).toInt32();
+                console.log('Calculate offset between BrowserWindow and WebContents:', offsetWinAndWebContents);
+            } else {
+                offsetWinAndWebContents = 0x8c;
             }
-            const [url,] = [args[0], args[1]];
-            const urlString = url.add(8).readPointer().readCString();
-            console.log("Enter WebContents::LoadURL: ", thisPtr, urlString);
-            // OpenDevToolsFunction(thisPtr, ptr(0));
+            const webContentsPtr = windowPtr.add(offsetWinAndWebContents).readPointer();
+            console.log("webContentsPtr", webContentsPtr);
+            return webContentsPtr;
         }
-    });
+        // const WebContentsLoadURL = m.add(0x59e200 - 0x400000);
+        const WebContentsLoadURL = findLoadURLAddress(module);
+        Interceptor.attach(WebContentsLoadURL, {
+            onEnter: function (args) {
+                const thisPtr = (this.context as Ia32CpuContext)['ecx'];
+                if (firstWebContentsPtr === null) {
+                    firstWebContentsPtr = thisPtr;
+                }
+                const [url,] = [args[0], args[1]];
+                const urlString = url.add(8).readPointer().readCString();
+                console.log(`Enter WebContents::LoadURL: thisPtr ${thisPtr}, url ${urlString}`);
+            }
+        });
 
-    const BaseWindowOnWindowShow = findBaseWindowOnWindowShow(module);
-    Interceptor.attach(BaseWindowOnWindowShow, {
-        onEnter: function () {
-            console.log("Enter BaseWindow::OnWindowShow");
-            const thisPtr = (this.context as Ia32CpuContext)['ecx'];
-            if (firstBaseWindowPtr === null) {
-                firstBaseWindowPtr = thisPtr;
+        const BaseWindowOnWindowShow = findBaseWindowOnWindowShow(module);
+        Interceptor.attach(BaseWindowOnWindowShow, {
+            onEnter: function () {
+                const thisPtr = (this.context as Ia32CpuContext)['ecx'];
+                console.log(`Enter BaseWindow::OnWindowShow: thisPtr ${thisPtr}`);
+                if (firstBaseWindowPtr === null) {
+                    firstBaseWindowPtr = thisPtr;
+                }
+                OpenDevToolsFunction(windowPtrToWebContentsPtr(thisPtr), ptr(0));
             }
-            console.log("Called BaseWindow::OnWindowShow", thisPtr);
-            OpenDevToolsFunction(windowPtrToWebContentsPtr(thisPtr), ptr(0));
-        }
-    });
+        });
+    }
+
+    if(whenF12Pressed){
+        const WebContentsPreHandleKeyboardEvent = findWebContentsPreHandleKeyboardEvent(module);
+        Interceptor.attach(WebContentsPreHandleKeyboardEvent, {
+            onEnter: function (args) {
+                const thisPtr = (this.context as Ia32CpuContext)['ecx'];
+                const [, nativeWebKeyboardEvent] = [args[0], args[1]];
+                const eventType = nativeWebKeyboardEvent.add(0x20).readU32();
+                const modifiers_ = nativeWebKeyboardEvent.add(0x24).readU32();
+                const windows_key_code = nativeWebKeyboardEvent.add(0x28).readU32();
+                console.log(`Enter WebContents::PreHandleKeyboardEvent: thisPtr ${thisPtr}, eventType ${eventType}, modifiers_ ${modifiers_}, windows_key_code ${windows_key_code}`);
+                // if key is F12 and type is kKeyUp
+                if (windows_key_code === 123 && (eventType === 9)) {
+                    console.log(`F12 pressed, open devtools`);
+                    // todo: 我也不知道为什么这里要减0x1c，理论上应该是不需要的
+                    OpenDevToolsFunction(thisPtr.sub(0x1c), ptr(0));
+                }
+            }
+        });
+    }
 }
 
 export {
