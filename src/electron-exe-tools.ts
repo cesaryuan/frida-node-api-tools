@@ -211,10 +211,11 @@ function getAllModifiers(modifers: number): Modifiers[] {
 function findOpenDevToolsAddress(electronModule: Module | undefined = undefined): NativePointer {
     const m = electronModule ?? Process.enumerateModules()[0];
     // Firstly, find the middle part of the openDevTools function
-    const pattern = new MatchPattern("8B 41 68 83 F8 03 0F 84 ?? ?? ?? ?? 89 CE 80 79 75 00 0F 84");
-    const a = findInReadableRanges(m, pattern);
+    const pattern = new MatchPattern("8B 41 68 83 F8 03 0F 84 ?? ?? ?? ?? ?? CE 80 79 75 00 0F 84");
+    // const a = findInReadableRanges(m, pattern); 
+    const a = Memory.scanSync(m.base, m.size, pattern);
     if (a.length > 1) throw new Error("find more than one matches");
-    if (a.length == 0) throw new Error("find no matches");
+    if (a.length == 0) throw new Error("not find openDevTools function pattern in ReadableRanges");
     const [match] = a;
     // Then, find the start of the function
     const [func_start] = Memory.scanSync(match.address.sub(0x20), 0x20, "55 89 e5 53 57 56");
@@ -290,6 +291,7 @@ function findBrowserWindowOnWindowFocus(
     return func_start.address;
 }
 
+/** BaseWindow::OnWindowShow */
 function findBaseWindowOnWindowShow(electronModule: Module | undefined = undefined): NativePointer {
     const m = electronModule ?? Process.enumerateModules()[0];
     // Firstly, find the string "show" address
@@ -309,11 +311,12 @@ function findBaseWindowOnWindowShow(electronModule: Module | undefined = undefin
     return BaseWindowOnWindowShow.address;
 }
 
+
+/** WebContents::PreHandleKeyboardEvent */
 function findWebContentsPreHandleKeyboardEvent(
     electronModule: Module | undefined = undefined
 ): NativePointer {
     const m = electronModule ?? Process.enumerateModules()[0];
-    // Firstly, find the string "show" address
     const pattern = new MatchPattern("53 6A ?? 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 88 44 24 ?? 89 D9 E8");
     const a = findInReadableRanges(m, pattern);
     if (a.length > 1) throw new Error("find more than one matches");

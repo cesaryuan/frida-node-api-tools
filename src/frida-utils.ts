@@ -29,8 +29,9 @@ function appendLineToFile(filePath: string | File, line: string) {
 
 function getProcessDir() {
     const processDir = Process.enumerateModules()[0].path;
-    return processDir.substring(0, processDir.lastIndexOf('/'));
+    return processDir.substring(0, processDir.lastIndexOf('\\'));
 }
+
 
 export {
     findInReadableRanges,
