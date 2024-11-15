@@ -6,8 +6,8 @@
   "main": "agent/index.ts",
   "scripts": {
     "prepare": "npm run build",
-    "build": "frida-compile src/index.ts -o build/_agent.js -c",
-    "watch": "frida-compile src/index.ts -o build/_agent.js -w"
+    "build": "frida-compile src/main.ts -o build/_agent.js -c",
+    "watch": "frida-compile src/main.ts -o build/_agent.js -w"
   },
   "devDependencies": {
     "@types/frida-gum": "^18.1.0",
@@ -15,7 +15,6 @@
     "@typescript-eslint/eslint-plugin": "^5.59.0",
     "@typescript-eslint/parser": "^5.59.0",
     "eslint": "^8.38.0",
-    "frida-compile": "^15.0.8",
-    "playwright": "^1.32.3"
+    "frida-compile": "^15.0.8"
   }
 }
